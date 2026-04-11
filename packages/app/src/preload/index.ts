@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld("jet", {
   getConfig: () => ipcRenderer.invoke("jet:get-config"),
   listRepos: () => ipcRenderer.invoke("jet:list-repos"),
   trackRepo: (repoPath: string) => ipcRenderer.invoke("jet:track-repo", repoPath),
+  untrackRepo: (repoPath: string) => ipcRenderer.invoke("jet:untrack-repo", repoPath),
+  openRepoGithub: (repoPath: string) => ipcRenderer.invoke("jet:open-repo-github", repoPath),
   addWorktree: (repoPath: string, branch: string) => ipcRenderer.invoke("jet:add-worktree", repoPath, branch),
   removeWorktree: (repoPath: string, branch: string) => ipcRenderer.invoke("jet:remove-worktree", repoPath, branch),
   listIdes: () => ipcRenderer.invoke("jet:list-ides"),

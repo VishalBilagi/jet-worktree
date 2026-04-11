@@ -1,6 +1,8 @@
 import { AddWorktreeDialog } from "@renderer/components/add-worktree-dialog"
+import { CommandPalette } from "@renderer/components/command-palette"
 import { GearSix, Plus } from "@phosphor-icons/react"
 import { useQueryClient } from "@tanstack/react-query"
+import { useEffect } from "react"
 import { RepoTree } from "@renderer/components/repo-tree"
 import { SettingsDialog } from "@renderer/components/settings-dialog"
 import { TrackRepoDialog } from "@renderer/components/track-repo-dialog"
@@ -12,9 +14,12 @@ export function HomePage() {
   const queryClient = useQueryClient()
   const { data, isLoading, error } = useRepos()
   const {
+    isCommandPaletteOpen,
     isTrackDialogOpen,
     isSettingsDialogOpen,
     addWorktreeRepoPath,
+    setCommandPaletteOpen,
+    openCommandPalette,
     setTrackDialogOpen,
     setSettingsDialogOpen,
     openAddWorktreeDialog,
@@ -24,6 +29,64 @@ export function HomePage() {
   function refresh() {
     void queryClient.invalidateQueries({ queryKey: ["repos"] })
   }
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (!event.metaKey) {
+        return
+      }
+
+      if (event.key.toLowerCase() === "k") {
+        event.preventDefault()
+        setCommandPaletteOpen(!isCommandPaletteOpen)
+        return
+      }
+
+      if (event.key.toLowerCase() === "o") {
+        event.preventDefault()
+        openCommandPalette("open-github-repo")
+        return
+      }
+
+      if (event.key.toLowerCase() === "i") {
+        event.preventDefault()
+        openCommandPalette("open-ide-worktree")
+        return
+      }
+
+      if (event.key.toLowerCase() === "t") {
+        event.preventDefault()
+        openCommandPalette("open-terminal-worktree")
+        return
+      }
+
+      if (event.key.toLowerCase() === "n") {
+        event.preventDefault()
+        setCommandPaletteOpen(false)
+
+        if (data?.repos[0]) {
+          openAddWorktreeDialog(data.repos[0].rootPath)
+        }
+
+        return
+      }
+
+      if (event.key === ",") {
+        event.preventDefault()
+        setCommandPaletteOpen(false)
+        setSettingsDialogOpen(true)
+        return
+      }
+
+      if (event.key.toLowerCase() === "r") {
+        event.preventDefault()
+        void queryClient.invalidateQueries({ queryKey: ["repos"] })
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [data?.repos, isCommandPaletteOpen, openAddWorktreeDialog, openCommandPalette, queryClient, setCommandPaletteOpen, setSettingsDialogOpen])
 
   const repoCount = data?.repos.length ?? 0
   const worktreeCount = data?.repos.reduce((count, repo) => count + repo.worktrees.length, 0) ?? 0
@@ -63,6 +126,7 @@ export function HomePage() {
       <TrackRepoDialog open={isTrackDialogOpen} onClose={() => setTrackDialogOpen(false)} onTracked={refresh} />
       <AddWorktreeDialog open={Boolean(addWorktreeRepoPath)} repo={selectedRepo} onClose={closeAddWorktreeDialog} onCreated={refresh} />
       <SettingsDialog open={isSettingsDialogOpen} onClose={() => setSettingsDialogOpen(false)} />
+      <CommandPalette onRefresh={refresh} />
     </div>
   )
 }
