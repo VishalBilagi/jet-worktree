@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process"
 import { realpath, stat } from "node:fs/promises"
 import path from "node:path"
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron"
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from "electron"
 import { getInstalledIdes, openInIde } from "./ide"
 import { getInstalledTerminals, openInTerminal } from "./terminal"
 import { runJet } from "./jet"
@@ -43,6 +43,23 @@ type JetReposPayload = {
 }
 
 let mainWindow: BrowserWindow | null = null
+
+async function setDevDockIcon() {
+  if (app.isPackaged || process.platform !== "darwin") {
+    return
+  }
+
+  try {
+    const devIconPath = path.join(app.getAppPath(), "resources", "AppIconDev.png")
+    const icon = nativeImage.createFromPath(devIconPath)
+    if (!icon.isEmpty()) {
+      app.dock.setIcon(icon)
+    }
+  } catch {
+    // Keep dev startup resilient if the source asset moves.
+  }
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1120,
@@ -93,6 +110,8 @@ async function requireTrackedWorktreePath(pathname: string) {
 }
 
 app.whenReady().then(() => {
+  void setDevDockIcon()
+
   ipcMain.handle("jet:pick-repo", async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ["openDirectory"],

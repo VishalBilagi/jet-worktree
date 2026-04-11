@@ -3,6 +3,7 @@ bun.lock
 
 packages/*/dist/
 packages/*/out/
+packages/app/build/
 packages/app/resources/bin/jet*
 coverage/
 
