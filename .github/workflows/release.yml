@@ -11,17 +11,7 @@ permissions:
 
 jobs:
   build-cli:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: arm64
-            target: bun-darwin-arm64
-            runner: macos-latest
-          - arch: x64
-            target: bun-darwin-x64
-            runner: macos-13
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -39,27 +29,17 @@ jobs:
           mkdir -p release
           bun build packages/cli/src/index.ts \
             --compile \
-            --target=${{ matrix.target }} \
-            --outfile release/jet-${{ matrix.arch }}
+            --target=bun-darwin-arm64 \
+            --outfile release/jet
 
       - name: Upload CLI artifact
         uses: actions/upload-artifact@v4
         with:
-          name: cli-${{ matrix.arch }}
-          path: release/jet-${{ matrix.arch }}
+          name: cli-arm64
+          path: release/jet
 
   build-app:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: arm64
-            runner: macos-latest
-            electron-arch: --arm64
-          - arch: x64
-            runner: macos-13
-            electron-arch: --x64
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -77,22 +57,22 @@ jobs:
           mkdir -p packages/app/resources/bin
           bun build packages/cli/src/index.ts \
             --compile \
-            --target=bun-darwin-${{ matrix.arch }} \
-            --outfile packages/app/resources/bin/jet-${{ matrix.arch }}
-          chmod +x packages/app/resources/bin/jet packages/app/resources/bin/jet-${{ matrix.arch }}
+            --target=bun-darwin-arm64 \
+            --outfile packages/app/resources/bin/jet
+          chmod +x packages/app/resources/bin/jet
 
       - name: Build app assets
         run: bun run --cwd packages/app build
 
       - name: Package macOS app
-        run: bun run --cwd packages/app dist -- --mac zip dmg ${{ matrix.electron-arch }}
+        run: bun run --cwd packages/app dist -- --mac zip dmg --arm64
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
       - name: Upload app artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: app-${{ matrix.arch }}
+          name: app-arm64
           path: |
             packages/app/dist/Jet-*.dmg
             packages/app/dist/Jet-*.zip
@@ -117,8 +97,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release-artifacts/jet-arm64
-            release-artifacts/jet-x64
+            release-artifacts/jet
             release-artifacts/Jet-*.dmg
             release-artifacts/Jet-*.zip
 
@@ -140,7 +119,6 @@ jobs:
           ./scripts/render-homebrew-cask.sh \
             "$version" \
             "release-artifacts/Jet-$version-arm64.zip" \
-            "release-artifacts/Jet-$version-x64.zip" \
             "$GITHUB_WORKSPACE/homebrew-tap"
 
       - name: Create tap pull request

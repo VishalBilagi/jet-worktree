@@ -14,9 +14,7 @@ files:
   - package.json
 
 extraResources:
-  - from: resources/bin/jet
-    to: bin/jet
   - from: resources/bin/
     to: bin/
     filter:
-      - jet-*
+      - jet
