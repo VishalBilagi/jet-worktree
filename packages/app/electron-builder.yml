@@ -1,0 +1,22 @@
+appId: com.jet.worktree
+productName: Jet
+artifactName: Jet-${version}-${arch}.${ext}
+
+directories:
+  output: dist
+
+mac:
+  category: public.app-category.developer-tools
+  identity: null
+
+files:
+  - out/**/*
+  - package.json
+
+extraResources:
+  - from: resources/bin/jet
+    to: bin/jet
+  - from: resources/bin/
+    to: bin/
+    filter:
+      - jet-*

@@ -1,0 +1,159 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  build-cli:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            target: bun-darwin-arm64
+            runner: macos-latest
+          - arch: x64
+            target: bun-darwin-x64
+            runner: macos-13
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.2.8"
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build standalone CLI
+        run: |
+          mkdir -p release
+          bun build packages/cli/src/index.ts \
+            --compile \
+            --target=${{ matrix.target }} \
+            --outfile release/jet-${{ matrix.arch }}
+
+      - name: Upload CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.arch }}
+          path: release/jet-${{ matrix.arch }}
+
+  build-app:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-latest
+            electron-arch: --arm64
+          - arch: x64
+            runner: macos-13
+            electron-arch: --x64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.2.8"
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Bundle CLI for app
+        run: |
+          mkdir -p packages/app/resources/bin
+          bun build packages/cli/src/index.ts \
+            --compile \
+            --target=bun-darwin-${{ matrix.arch }} \
+            --outfile packages/app/resources/bin/jet-${{ matrix.arch }}
+          chmod +x packages/app/resources/bin/jet packages/app/resources/bin/jet-${{ matrix.arch }}
+
+      - name: Build app assets
+        run: bun run --cwd packages/app build
+
+      - name: Package macOS app
+        run: bun run --cwd packages/app dist -- --mac zip dmg ${{ matrix.electron-arch }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Upload app artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-${{ matrix.arch }}
+          path: |
+            packages/app/dist/Jet-*.dmg
+            packages/app/dist/Jet-*.zip
+
+  publish:
+    needs:
+      - build-cli
+      - build-app
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Create GitHub release
+        id: github_release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release-artifacts/jet-arm64
+            release-artifacts/jet-x64
+            release-artifacts/Jet-*.dmg
+            release-artifacts/Jet-*.zip
+
+      - name: Check out tap repository
+        if: ${{ vars.HOMEBREW_TAP_REPOSITORY != '' && steps.github_release.outcome == 'success' }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.HOMEBREW_TAP_REPOSITORY }}
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Render Homebrew cask
+        if: ${{ vars.HOMEBREW_TAP_REPOSITORY != '' && steps.github_release.outcome == 'success' }}
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          HOMEBREW_CASK_NAME: ${{ vars.HOMEBREW_CASK_NAME }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          ./scripts/render-homebrew-cask.sh \
+            "$version" \
+            "release-artifacts/Jet-$version-arm64.zip" \
+            "release-artifacts/Jet-$version-x64.zip" \
+            "$GITHUB_WORKSPACE/homebrew-tap"
+
+      - name: Create tap pull request
+        if: ${{ vars.HOMEBREW_TAP_REPOSITORY != '' && steps.github_release.outcome == 'success' }}
+        uses: peter-evans/create-pull-request@v7
+        with:
+          path: homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          branch: release/jet-${{ github.ref_name }}
+          commit-message: Update Jet Homebrew cask for ${{ github.ref_name }}
+          title: Update Jet Homebrew cask for ${{ github.ref_name }}
+          body: |
+            Automated update for Jet ${{ github.ref_name }}.
+
+            Includes:
+            - `Casks/${{ vars.HOMEBREW_CASK_NAME || 'jet-worktree' }}.rb`

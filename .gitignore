@@ -3,6 +3,7 @@ bun.lock
 
 packages/*/dist/
 packages/*/out/
+packages/app/resources/bin/jet*
 coverage/
 
 .env
@@ -18,3 +19,5 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+.husky/_

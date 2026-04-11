@@ -1,11 +1,13 @@
 {
   "name": "jet-worktree",
+  "version": "0.1.0",
   "private": true,
   "packageManager": "bun@1.2.8",
   "workspaces": [
     "packages/*"
   ],
   "scripts": {
+    "prepare": "husky",
     "build": "bun run build:cli && bun run build:app",
     "build:cli": "bun run --cwd packages/cli build",
     "build:app": "bun run --cwd packages/app build",
@@ -13,5 +15,10 @@
     "dev:app": "bun run --cwd packages/app dev",
     "test": "bun run --cwd packages/cli test",
     "jet": "bun run --cwd packages/cli src/index.ts"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
+    "husky": "^9.1.7"
   }
 }

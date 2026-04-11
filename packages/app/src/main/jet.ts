@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process"
+import { existsSync } from "node:fs"
 import path from "node:path"
 import { app } from "electron"
 
@@ -14,14 +15,34 @@ type JetFailure = {
 
 export type JetResponse = JetSuccess | JetFailure
 
-function getWorkspaceRoot() {
-  return path.resolve(app.getAppPath(), "../..")
+type JetCommand = {
+  command: string
+  args: string[]
+  cwd?: string
 }
 
-export function runJet(args: string[], cwd = getWorkspaceRoot()) {
+function getJetCommand(): JetCommand {
+  const bundledBinary = path.join(process.resourcesPath, "bin", "jet")
+
+  if (existsSync(bundledBinary)) {
+    return {
+      command: bundledBinary,
+      args: [],
+    }
+  }
+
+  return {
+    command: "bun",
+    args: ["run", "jet", "--"],
+    cwd: path.resolve(app.getAppPath(), "../.."),
+  }
+}
+
+export function runJet(args: string[], cwd?: string) {
   return new Promise<JetResponse>((resolve) => {
-    const child = spawn("bun", ["run", "jet", "--", "--json", ...args], {
-      cwd,
+    const jet = getJetCommand()
+    const child = spawn(jet.command, [...jet.args, "--json", ...args], {
+      cwd: cwd ?? jet.cwd,
       env: process.env,
       stdio: ["ignore", "pipe", "pipe"],
     })
