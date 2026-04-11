@@ -261,6 +261,43 @@ describe("jet CLI integration", () => {
     }
   }, 20000)
 
+  test("prints a worktree path with go --print inside a repo", async () => {
+    const context = await createTestContext()
+    const repoPath = await createRepo(context, "go-print")
+
+    try {
+      const addResult = await runJet(["add", "feature/go-print"], repoPath, context)
+      const addJson = addResult.json as { path: string }
+      const goResult = await runJet(["go", "feature/go-print", "--print"], repoPath, context)
+      const goJson = goResult.json as { path: string; branch: string | null }
+
+      expect(goJson.branch).toBe("feature/go-print")
+      expect(await canonicalPath(goJson.path)).toBe(await canonicalPath(addJson.path))
+    } finally {
+      await cleanupTestContext(context)
+    }
+  }, 20000)
+
+  test("prints a tracked repo worktree path with go --print outside a repo", async () => {
+    const context = await createTestContext()
+    const repoPath = await createRepo(context, "tracked-go")
+
+    try {
+      const addResult = await runJet(["add", "feature/tracked-go"], repoPath, context)
+      const addJson = addResult.json as { path: string }
+      await runJet(["track", repoPath], repoPath, context)
+
+      const goResult = await runJet(["go", "feature/tracked-go", "--print"], context.repoRoot, context)
+      const goJson = goResult.json as { path: string; branch: string | null; repoRoot: string }
+
+      expect(goJson.repoRoot).toBe(repoPath)
+      expect(goJson.branch).toBe("feature/tracked-go")
+      expect(await canonicalPath(goJson.path)).toBe(await canonicalPath(addJson.path))
+    } finally {
+      await cleanupTestContext(context)
+    }
+  }, 20000)
+
   test("reports missing tracked repos without crashing", async () => {
     const context = await createTestContext()
     const repoPath = await createRepo(context, "missing")
