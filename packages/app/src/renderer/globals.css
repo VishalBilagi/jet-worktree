@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: "Space Grotesk", sans-serif;
+  --font-heading: "Montserrat", sans-serif;
+
+  --color-background: #0a0a0a;
+  --color-secondary: #141414;
+  --color-surface: #111111;
+  --color-hover: #1a1a1a;
+  --color-border: #222222;
+  --color-border-subtle: #161616;
+  --color-foreground: #e5e5e5;
+  --color-muted-foreground: #737373;
+  --color-subtle-foreground: #525252;
+  --color-accent: #22d3ee;
+  --color-accent-hover: #06b6d4;
+  --color-accent-foreground: #03131a;
+  --color-status-clean: #4ade80;
+  --color-status-dirty: #fb923c;
+  --color-status-error: #f87171;
+}
+
+@layer base {
+  * {
+    @apply box-border border-border;
+  }
+
+  html,
+  body,
+  #root {
+    @apply m-0 h-full min-h-full bg-background;
+  }
+
+  body {
+    @apply overflow-hidden bg-background font-sans text-foreground antialiased;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #3a3a3a #0a0a0a;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #0a0a0a;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    border: 2px solid #0a0a0a;
+    background: #3a3a3a;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #525252;
+  }
+
+  button,
+  input {
+    font: inherit;
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "jet-worktree",
+  "private": true,
+  "packageManager": "bun@1.2.8",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "bun run build:cli && bun run build:app",
+    "build:cli": "bun run --cwd packages/cli build",
+    "build:app": "bun run --cwd packages/app build",
+    "dev:cli": "bun run --cwd packages/cli dev",
+    "dev:app": "bun run --cwd packages/app dev",
+    "test": "bun run --cwd packages/cli test",
+    "jet": "bun run --cwd packages/cli src/index.ts"
+  }
+}

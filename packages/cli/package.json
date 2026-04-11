@@ -1,0 +1,25 @@
+{
+  "name": "@jet/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "jet": "dist/index.js",
+    "jt": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --target node20 --dts --clean",
+    "dev": "bun run src/index.ts --help",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
+    "simple-git": "^3.27.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "tsup": "^8.4.0",
+    "typescript": "^5.8.3"
+  }
+}
