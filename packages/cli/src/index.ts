@@ -2,6 +2,7 @@
 import { spawn } from "node:child_process"
 import { Command } from "commander"
 import { addTrackedRepo, getConfigPath, getWorktreeRoot, readConfig, removeTrackedRepo } from "./lib/config"
+import { enterOrPrintTarget, resolveGoTarget, SelectionCancelledError } from "./lib/go"
 import { ensureWorktree, listTrackedRepos, listWorktrees, removeWorktreeByBranch, resolveRepo, resolveWorktreePath } from "./lib/git"
 import { formatConfig, formatPath, formatRepoSummary, formatWorktreeList } from "./utils/format"
 import { outputResult, printJson } from "./utils/json"
@@ -11,6 +12,7 @@ type CommandOptions = {
   force?: boolean
   path?: string
   repo?: string
+  print?: boolean
 }
 
 const program = new Command()
@@ -133,6 +135,22 @@ program
   })
 
 program
+  .command("go")
+  .description("Jump into a worktree or print its path")
+  .argument("[branch]", "Branch name to jump to")
+  .option("--print", "Print the resolved path instead of opening a shell there")
+  .action(async (branch: string | undefined, options: CommandOptions, command) => {
+    const target = await resolveGoTarget(getRepoPath(command), branch)
+
+    if (shouldOutputJson(command)) {
+      printJson(target)
+      return
+    }
+
+    await enterOrPrintTarget(target, Boolean(options.print))
+  })
+
+program
   .command("config")
   .description("Show Jet config")
   .action(async (_args, command) => {
@@ -189,6 +207,11 @@ program
   })
 
 program.parseAsync(process.argv).catch((error: Error) => {
+  if (error instanceof SelectionCancelledError) {
+    process.exitCode = 0
+    return
+  }
+
   process.stderr.write(`${error.message}\n`)
   process.exitCode = 1
 })
