@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to rebuild, for example v1.0.0
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -15,6 +21,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -43,6 +51,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -85,6 +95,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
       - name: Download release artifacts
         uses: actions/download-artifact@v4
@@ -115,7 +127,8 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           HOMEBREW_CASK_NAME: ${{ vars.HOMEBREW_CASK_NAME }}
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          tag_name="${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          version="${tag_name#v}"
           ./scripts/render-homebrew-cask.sh \
             "$version" \
             "release-artifacts/Jet-$version-arm64.zip" \
@@ -127,11 +140,11 @@ jobs:
         with:
           path: homebrew-tap
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          branch: release/jet-${{ github.ref_name }}
-          commit-message: Update Jet Homebrew cask for ${{ github.ref_name }}
-          title: Update Jet Homebrew cask for ${{ github.ref_name }}
+          branch: release/jet-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          commit-message: Update Jet Homebrew cask for ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          title: Update Jet Homebrew cask for ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           body: |
-            Automated update for Jet ${{ github.ref_name }}.
+            Automated update for Jet ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}.
 
             Includes:
             - `Casks/${{ vars.HOMEBREW_CASK_NAME || 'jet-worktree' }}.rb`
