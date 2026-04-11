@@ -8,6 +8,9 @@ directories:
 mac:
   category: public.app-category.developer-tools
   identity: "-"
+  icon: build/icon.icns
+  extendInfo:
+    CFBundleIconName: AppIcon
 
 files:
   - out/**/*
@@ -18,3 +21,5 @@ extraResources:
     to: bin/
     filter:
       - jet
+  - from: resources/AppIcon.icon
+    to: AppIcon.icon

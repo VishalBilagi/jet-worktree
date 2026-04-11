@@ -6,8 +6,9 @@
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "electron-vite build",
-    "dist": "electron-builder --config electron-builder.yml --publish never"
+    "generate:icon": "bash ./scripts/generate-icns.sh",
+    "build": "bun run generate:icon && bunx electron-vite build",
+    "dist": "bun run generate:icon && bunx electron-builder --config electron-builder.yml --publish never"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
