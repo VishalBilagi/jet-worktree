@@ -42,6 +42,8 @@ declare global {
       getConfig: () => Promise<{ ok: true; data: unknown } | { ok: false; error: string }>
       listRepos: () => Promise<{ ok: true; data: unknown } | { ok: false; error: string }>
       trackRepo: (repoPath: string) => Promise<{ ok: true; data: unknown } | { ok: false; error: string }>
+      untrackRepo: (repoPath: string) => Promise<{ ok: true; data: unknown } | { ok: false; error: string }>
+      openRepoGithub: (repoPath: string) => Promise<{ ok: true } | { ok: false; error: string }>
       addWorktree: (repoPath: string, branch: string) => Promise<{ ok: true; data: unknown } | { ok: false; error: string }>
       removeWorktree: (repoPath: string, branch: string) => Promise<{ ok: true; data: unknown } | { ok: false; error: string }>
       listIdes: () => Promise<{ ok: true; data: InstalledIde[] } | { ok: false; error: string }>

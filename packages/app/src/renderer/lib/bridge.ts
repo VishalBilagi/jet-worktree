@@ -5,3 +5,14 @@ export function getJetBridge() {
 
   return window.jet
 }
+
+export function getJetBridgeMethod<K extends keyof NonNullable<Window["jet"]>>(method: K): NonNullable<Window["jet"]>[K] {
+  const bridge = getJetBridge()
+  const value = bridge[method]
+
+  if (typeof value !== "function") {
+    throw new Error(`Jet preload bridge is missing '${String(method)}'. Restart the Electron app to load the updated bridge.`)
+  }
+
+  return value
+}
