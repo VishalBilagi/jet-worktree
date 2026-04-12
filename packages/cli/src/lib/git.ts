@@ -33,6 +33,15 @@ export type RepoListError = {
   error: string
 }
 
+export type BranchInfo = {
+  name: string
+  scope: "local" | "remote"
+}
+
+type EnsureWorktreeOptions = {
+  startPoint?: string
+}
+
 type RawWorktreeEntry = {
   path: string
   branch: string | null
@@ -170,6 +179,10 @@ export function parseWorktreeList(raw: string): RawWorktreeEntry[] {
 }
 
 export async function ensureWorktree(repoRoot: string, repoSlug: string, branch: string) {
+  return ensureWorktreeWithOptions(repoRoot, repoSlug, branch)
+}
+
+export async function ensureWorktreeWithOptions(repoRoot: string, repoSlug: string, branch: string, options: EnsureWorktreeOptions = {}) {
   const desiredPath = resolveWorktreePath(repoSlug, branch)
   const repoGit = createGit(repoRoot)
   await repoGit.raw(["worktree", "prune"])
@@ -183,6 +196,7 @@ export async function ensureWorktree(repoRoot: string, repoSlug: string, branch:
   const git = repoGit
   const localExists = await branchExists(git, branch)
   const remoteExists = await remoteBranchExists(git, branch)
+  const startPoint = options.startPoint?.trim()
 
   if (localExists) {
     await git.raw(["worktree", "add", desiredPath, branch])
@@ -194,7 +208,25 @@ export async function ensureWorktree(repoRoot: string, repoSlug: string, branch:
     return desiredPath
   }
 
-  await git.raw(["worktree", "add", "-b", branch, desiredPath, "HEAD"])
+  await git.raw(["worktree", "add", "-b", branch, desiredPath, startPoint || "HEAD"])
+  return desiredPath
+}
+
+export async function ensureWorktreeFromPullRequest(repoRoot: string, repoSlug: string, prNumber: number, branchName?: string) {
+  const branch = branchName?.trim() || `pr/${prNumber}`
+  const git = createGit(repoRoot)
+  const pullRequestRef = `refs/pull/${prNumber}/head`
+  const remoteLookup = await git.raw(["ls-remote", "--refs", "origin", pullRequestRef])
+
+  if (!remoteLookup.trim()) {
+    throw new Error(`Unable to find origin/${pullRequestRef}. This currently supports GitHub-style pull request refs.`)
+  }
+
+  if (!(await branchExists(git, branch))) {
+    await git.raw(["fetch", "--no-tags", "origin", `pull/${prNumber}/head:${branch}`])
+  }
+
+  const desiredPath = await ensureWorktreeWithOptions(repoRoot, repoSlug, branch)
   return desiredPath
 }
 
@@ -273,6 +305,58 @@ async function branchExists(git: SimpleGit, branch: string) {
     return true
   } catch {
     return false
+  }
+}
+
+export async function listBranches(repoRoot: string): Promise<{
+  currentBranch: string | null
+  defaultBranch: string | null
+  local: BranchInfo[]
+  remote: BranchInfo[]
+}> {
+  const git = createGit(repoRoot)
+  const [currentBranch, defaultBranch, local, remote] = await Promise.all([
+    getCurrentBranch(git),
+    getDefaultBranch(git),
+    listBranchNames(git, "refs/heads"),
+    listBranchNames(git, "refs/remotes/origin", true),
+  ])
+
+  return {
+    currentBranch,
+    defaultBranch,
+    local: local.map((name) => ({ name, scope: "local" })),
+    remote: remote.map((name) => ({ name, scope: "remote" })),
+  }
+}
+
+async function listBranchNames(git: SimpleGit, refPrefix: string, stripOrigin = false) {
+  const output = await git.raw(["for-each-ref", "--format=%(refname:short)", refPrefix])
+  const names = output
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((name) => !name.endsWith("/HEAD"))
+    .map((name) => (stripOrigin ? name.replace(/^origin\//, "") : name))
+
+  return [...new Set(names)].sort((a, b) => a.localeCompare(b))
+}
+
+async function getCurrentBranch(git: SimpleGit) {
+  try {
+    const branch = (await git.revparse(["--abbrev-ref", "HEAD"])).trim()
+    return branch === "HEAD" ? null : branch
+  } catch {
+    return null
+  }
+}
+
+async function getDefaultBranch(git: SimpleGit) {
+  try {
+    const ref = (await git.raw(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"])).trim()
+    return ref.replace(/^refs\/remotes\/origin\//, "") || null
+  } catch {
+    return null
   }
 }
 

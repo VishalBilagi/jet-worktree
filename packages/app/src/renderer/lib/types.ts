@@ -35,6 +35,18 @@ export type InstalledTerminal = {
   iconClass: string | null
 }
 
+export type BranchInfo = {
+  name: string
+  scope: "local" | "remote"
+}
+
+export type BranchesPayload = {
+  currentBranch: string | null
+  defaultBranch: string | null
+  local: BranchInfo[]
+  remote: BranchInfo[]
+}
+
 declare global {
   interface Window {
     jet?: {
@@ -44,7 +56,8 @@ declare global {
       trackRepo: (repoPath: string) => Promise<{ ok: true; data: unknown } | { ok: false; error: string }>
       untrackRepo: (repoPath: string) => Promise<{ ok: true; data: unknown } | { ok: false; error: string }>
       openRepoGithub: (repoPath: string) => Promise<{ ok: true } | { ok: false; error: string }>
-      addWorktree: (repoPath: string, branch: string) => Promise<{ ok: true; data: unknown } | { ok: false; error: string }>
+      listBranches: (repoPath: string) => Promise<{ ok: true; data: BranchesPayload } | { ok: false; error: string }>
+      addWorktree: (repoPath: string, branch: string, base?: string) => Promise<{ ok: true; data: unknown } | { ok: false; error: string }>
       removeWorktree: (repoPath: string, branch: string) => Promise<{ ok: true; data: unknown } | { ok: false; error: string }>
       listIdes: () => Promise<{ ok: true; data: InstalledIde[] } | { ok: false; error: string }>
       openIde: (ideId: string, pathname: string) => Promise<{ ok: true } | { ok: false; error: string }>

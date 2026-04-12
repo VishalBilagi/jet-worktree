@@ -348,4 +348,28 @@ describe("jet CLI integration", () => {
       await cleanupTestContext(context)
     }
   }, 30000)
+
+  test("creates a new branch worktree from an explicit base branch", async () => {
+    const context = await createTestContext()
+    const repoPath = await createRepo(context, "base-branch")
+
+    try {
+      await runGit(["checkout", "-b", "develop"], repoPath)
+      await writeFile(path.join(repoPath, "develop.txt"), "from develop\n", "utf8")
+      await runGit(["add", "develop.txt"], repoPath)
+      await runGit(["commit", "-m", "Develop marker"], repoPath)
+      await runGit(["checkout", "main"], repoPath)
+
+      const addResult = await runJet(["add", "feature/from-develop", "--base", "develop"], repoPath, context)
+      const addJson = addResult.json as { path: string; branch: string }
+      const markerContent = await readFile(path.join(addJson.path, "develop.txt"), "utf8")
+      const branchName = (await runGit(["branch", "--show-current"], addJson.path)).stdout.trim()
+
+      expect(addJson.branch).toBe("feature/from-develop")
+      expect(branchName).toBe("feature/from-develop")
+      expect(markerContent.trim()).toBe("from develop")
+    } finally {
+      await cleanupTestContext(context)
+    }
+  }, 20000)
 })

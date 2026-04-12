@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process"
+import { createInterface } from "node:readline/promises"
 import { Command } from "commander"
 import { addTrackedRepo, getConfigPath, getWorktreeRoot, readConfig, removeTrackedRepo } from "./lib/config"
 import { enterOrPrintTarget, resolveGoTarget, SelectionCancelledError } from "./lib/go"
-import { ensureWorktree, listTrackedRepos, listWorktrees, removeWorktreeByBranch, resolveRepo, resolveWorktreePath } from "./lib/git"
+import { ensureWorktree, ensureWorktreeFromPullRequest, ensureWorktreeWithOptions, listBranches, listTrackedRepos, listWorktrees, removeWorktreeByBranch, resolveRepo, resolveWorktreePath } from "./lib/git"
 import { formatConfig, formatPath, formatRepoSummary, formatWorktreeList } from "./utils/format"
 import { outputResult, printJson } from "./utils/json"
 
@@ -76,16 +77,81 @@ program
 program
   .command("add")
   .description("Create a worktree for a branch")
-  .argument("<branch>")
-  .action(async (branch: string, command) => {
+  .argument("[branch]")
+  .option("--base <ref>", "Base ref used when creating a new branch (main|develop|current|<ref>)")
+  .option("--pull-request <number>, --pr <number>", "Create a worktree from a pull request branch")
+  .action(async (branch: string | undefined, options: { base?: string; pullRequest?: string; pr?: string }, command) => {
     const repo = await resolveRepo(getRepoPath(command))
-    const worktreePath = await ensureWorktree(repo.rootPath, repo.repoSlug, branch)
+    const pullRequestValue = options.pullRequest ?? options.pr
+
+    if (pullRequestValue) {
+      const prNumber = Number.parseInt(pullRequestValue, 10)
+      if (Number.isNaN(prNumber) || prNumber <= 0) {
+        throw new Error("Pull request number must be a positive integer")
+      }
+
+      const derivedBranch = branch?.trim() || `pr/${prNumber}`
+      const worktreePath = await ensureWorktreeFromPullRequest(repo.rootPath, repo.repoSlug, prNumber, derivedBranch)
+      outputResult(shouldOutputJson(command), {
+        branch: derivedBranch,
+        path: worktreePath,
+        repoSlug: repo.repoSlug,
+        created: true,
+        pullRequest: prNumber,
+      }, (data) => `Created ${data.branch} from PR #${data.pullRequest} at ${data.path}`)
+      return
+    }
+
+    if (!branch && shouldOutputJson(command)) {
+      throw new Error("Branch argument is required when using --json")
+    }
+
+    const branchMetadata = await listBranches(repo.rootPath)
+    const resolvedBranch = branch?.trim() || await promptForBranch(branchMetadata)
+    const baseRef = options.base
+      ? resolveBaseRef(options.base, branchMetadata)
+      : branch
+        ? null
+        : await promptForBaseRef(branchMetadata)
+    const chosenBase = baseRef ?? "HEAD"
+
+    const worktreeName = branch?.trim()
+      ? resolvedBranch
+      : await promptForWorktreeName(resolvedBranch)
+
+    const worktreePath = baseRef
+      ? await ensureWorktreeWithOptions(repo.rootPath, repo.repoSlug, worktreeName, { startPoint: baseRef })
+      : await ensureWorktree(repo.rootPath, repo.repoSlug, worktreeName)
+
     outputResult(shouldOutputJson(command), {
-      branch,
+      branch: worktreeName,
       path: worktreePath,
       repoSlug: repo.repoSlug,
       created: true,
-    }, (data) => `Created ${data.branch} at ${data.path}`)
+      base: chosenBase,
+    }, (data) => `Created ${data.branch} at ${data.path} (base: ${data.base})`)
+  })
+
+program
+  .command("branches")
+  .description("List local and remote branches for the current repo")
+  .action(async (_args, command) => {
+    const repo = await resolveRepo(getRepoPath(command))
+    const branches = await listBranches(repo.rootPath)
+    outputResult(shouldOutputJson(command), branches, (data) => {
+      const locals = data.local.map((entry) => `  - ${entry.name}`).join("\n") || "  (none)"
+      const remotes = data.remote.map((entry) => `  - ${entry.name}`).join("\n") || "  (none)"
+      return [
+        `Current: ${data.currentBranch ?? "detached"}`,
+        `Default: ${data.defaultBranch ?? "unknown"}`,
+        "",
+        "Local",
+        locals,
+        "",
+        "Remote (origin)",
+        remotes,
+      ].join("\n")
+    })
   })
 
 program
@@ -206,7 +272,9 @@ program
     })
   })
 
-program.parseAsync(process.argv).catch((error: Error) => {
+const normalizedArgv = process.argv.map((arg) => arg === "-pr" ? "--pr" : arg)
+
+program.parseAsync(normalizedArgv).catch((error: Error) => {
   if (error instanceof SelectionCancelledError) {
     process.exitCode = 0
     return
@@ -215,3 +283,139 @@ program.parseAsync(process.argv).catch((error: Error) => {
   process.stderr.write(`${error.message}\n`)
   process.exitCode = 1
 })
+
+function fuzzyScore(target: string, query: string) {
+  if (!query.trim()) {
+    return 1
+  }
+
+  const lowerTarget = target.toLowerCase()
+  const lowerQuery = query.toLowerCase()
+
+  if (lowerTarget.includes(lowerQuery)) {
+    return 10 + lowerQuery.length
+  }
+
+  let queryIndex = 0
+  let score = 0
+
+  for (let i = 0; i < lowerTarget.length && queryIndex < lowerQuery.length; i += 1) {
+    if (lowerTarget[i] === lowerQuery[queryIndex]) {
+      score += 1
+      queryIndex += 1
+    }
+  }
+
+  return queryIndex === lowerQuery.length ? score : -1
+}
+
+async function promptForBranch(branches: Awaited<ReturnType<typeof listBranches>>) {
+  const combined = [...branches.local, ...branches.remote]
+    .map((entry) => entry.name)
+    .filter((value, index, arr) => arr.indexOf(value) === index)
+
+  if (combined.length === 0) {
+    throw new Error("No branches found in this repository")
+  }
+
+  const readline = createInterface({ input: process.stdin, output: process.stdout })
+
+  try {
+    let query = ""
+
+    while (true) {
+      const candidates = combined
+        .map((name) => ({ name, score: fuzzyScore(name, query) }))
+        .filter((entry) => entry.score >= 0)
+        .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
+        .slice(0, 10)
+
+      process.stdout.write("\nChoose a branch for the worktree:\n")
+      candidates.forEach((entry, index) => {
+        process.stdout.write(`  ${index + 1}. ${entry.name}\n`)
+      })
+
+      const answer = (await readline.question("Filter (text), choose #, or type branch name directly: ")).trim()
+
+      if (!answer) {
+        if (candidates[0]) {
+          return candidates[0].name
+        }
+        continue
+      }
+
+      if (/^\d+$/.test(answer)) {
+        const selected = candidates[Number.parseInt(answer, 10) - 1]
+        if (selected) {
+          return selected.name
+        }
+
+        process.stdout.write("Invalid selection.\n")
+        continue
+      }
+
+      if (combined.includes(answer)) {
+        return answer
+      }
+
+      query = answer
+    }
+  } finally {
+    readline.close()
+  }
+}
+
+async function promptForWorktreeName(defaultBranch: string) {
+  const readline = createInterface({ input: process.stdin, output: process.stdout })
+  try {
+    const answer = (await readline.question(`Worktree branch name [${defaultBranch}]: `)).trim()
+    return answer || defaultBranch
+  } finally {
+    readline.close()
+  }
+}
+
+function resolveBaseRef(base: string | undefined, branches: Awaited<ReturnType<typeof listBranches>>) {
+  if (!base) {
+    return null
+  }
+
+  if (base === "current") {
+    return branches.currentBranch ?? "HEAD"
+  }
+
+  if (base === "main" || base === "develop") {
+    return base
+  }
+
+  return base
+}
+
+async function promptForBaseRef(branches: Awaited<ReturnType<typeof listBranches>>) {
+  const readline = createInterface({ input: process.stdin, output: process.stdout })
+  const options = [
+    { key: "1", label: "main", value: "main" },
+    { key: "2", label: "develop", value: "develop" },
+    { key: "3", label: `current (${branches.currentBranch ?? "HEAD"})`, value: branches.currentBranch ?? "HEAD" },
+    { key: "4", label: "specific ref", value: "specific" },
+  ]
+
+  try {
+    process.stdout.write("\nChoose base ref for new branch:\n")
+    options.forEach((entry) => {
+      process.stdout.write(`  ${entry.key}. ${entry.label}\n`)
+    })
+
+    const selectedKey = (await readline.question("Base [1]: ")).trim() || "1"
+    const selected = options.find((entry) => entry.key === selectedKey) ?? options[0]
+
+    if (selected.value !== "specific") {
+      return selected.value
+    }
+
+    const specificRef = (await readline.question("Git ref: ")).trim()
+    return specificRef || "HEAD"
+  } finally {
+    readline.close()
+  }
+}

@@ -166,7 +166,15 @@ app.whenReady().then(() => {
       })
     })
   })
-  ipcMain.handle("jet:add-worktree", async (_event, repoPath: string, branch: string) => runJet(["--repo", repoPath, "add", branch]))
+  ipcMain.handle("jet:list-branches", async (_event, repoPath: string) => runJet(["--repo", repoPath, "branches"]))
+  ipcMain.handle("jet:add-worktree", async (_event, repoPath: string, branch: string, base?: string) => {
+    const args = ["--repo", repoPath, "add", branch]
+    if (base?.trim()) {
+      args.push("--base", base.trim())
+    }
+
+    return runJet(args)
+  })
   ipcMain.handle("jet:remove-worktree", async (_event, repoPath: string, branch: string) => runJet(["--repo", repoPath, "remove", branch]))
   ipcMain.handle("jet:list-ides", async () => {
     const ides = await getInstalledIdes()
