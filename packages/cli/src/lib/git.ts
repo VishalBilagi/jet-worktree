@@ -336,8 +336,9 @@ async function listBranchNames(git: SimpleGit, refPrefix: string, stripOrigin = 
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
-    .filter((name) => !name.endsWith("/HEAD"))
     .map((name) => (stripOrigin ? name.replace(/^origin\//, "") : name))
+    .filter((name) => name !== "origin")
+    .filter((name) => !name.endsWith("/HEAD"))
 
   return [...new Set(names)].sort((a, b) => a.localeCompare(b))
 }

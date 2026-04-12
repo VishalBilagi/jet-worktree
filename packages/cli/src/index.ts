@@ -108,12 +108,15 @@ program
 
     const branchMetadata = await listBranches(repo.rootPath)
     const resolvedBranch = branch?.trim() || await promptForBranch(branchMetadata)
+    const branchAlreadyExists = hasKnownBranch(branchMetadata, resolvedBranch)
     const baseRef = options.base
       ? resolveBaseRef(options.base, branchMetadata)
-      : branch
-        ? null
-        : await promptForBaseRef(branchMetadata)
-    const chosenBase = baseRef ?? "HEAD"
+      : (!branch && !branchAlreadyExists)
+          ? await promptForBaseRef(branchMetadata, resolvedBranch)
+          : null
+    const chosenBase = branchAlreadyExists
+      ? resolvedBranch
+      : baseRef ?? "HEAD"
 
     const worktreeName = branch?.trim()
       ? resolvedBranch
@@ -129,7 +132,7 @@ program
       repoSlug: repo.repoSlug,
       created: true,
       base: chosenBase,
-    }, (data) => `Created ${data.branch} at ${data.path} (base: ${data.base})`)
+    }, (data) => `Created ${data.branch} at ${data.path} (source: ${data.base})`)
   })
 
 program
@@ -330,7 +333,7 @@ async function promptForBranch(branches: Awaited<ReturnType<typeof listBranches>
         .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
         .slice(0, 10)
 
-      process.stdout.write("\nChoose a branch for the worktree:\n")
+      process.stdout.write("\nChoose an existing branch (or type a new one):\n")
       candidates.forEach((entry, index) => {
         process.stdout.write(`  ${index + 1}. ${entry.name}\n`)
       })
@@ -355,6 +358,10 @@ async function promptForBranch(branches: Awaited<ReturnType<typeof listBranches>
       }
 
       if (combined.includes(answer)) {
+        return answer
+      }
+
+      if (query === answer) {
         return answer
       }
 
@@ -391,17 +398,24 @@ function resolveBaseRef(base: string | undefined, branches: Awaited<ReturnType<t
   return base
 }
 
-async function promptForBaseRef(branches: Awaited<ReturnType<typeof listBranches>>) {
+function hasKnownBranch(branches: Awaited<ReturnType<typeof listBranches>>, branch: string) {
+  return branches.local.some((entry) => entry.name === branch) || branches.remote.some((entry) => entry.name === branch)
+}
+
+async function promptForBaseRef(branches: Awaited<ReturnType<typeof listBranches>>, branchName: string) {
   const readline = createInterface({ input: process.stdin, output: process.stdout })
+  const suggestedDefault = branches.defaultBranch ?? branches.currentBranch ?? "HEAD"
   const options = [
-    { key: "1", label: "main", value: "main" },
-    { key: "2", label: "develop", value: "develop" },
-    { key: "3", label: `current (${branches.currentBranch ?? "HEAD"})`, value: branches.currentBranch ?? "HEAD" },
-    { key: "4", label: "specific ref", value: "specific" },
+    { key: "1", label: `origin default (${suggestedDefault})`, value: suggestedDefault },
+    { key: "2", label: "main", value: "main" },
+    { key: "3", label: "develop", value: "develop" },
+    { key: "4", label: `current (${branches.currentBranch ?? "HEAD"})`, value: branches.currentBranch ?? "HEAD" },
+    { key: "5", label: "specific ref", value: "specific" },
   ]
 
   try {
-    process.stdout.write("\nChoose base ref for new branch:\n")
+    process.stdout.write(`\n'${branchName}' does not exist yet.\n`)
+    process.stdout.write("Choose which ref to create it from:\n")
     options.forEach((entry) => {
       process.stdout.write(`  ${entry.key}. ${entry.label}\n`)
     })
